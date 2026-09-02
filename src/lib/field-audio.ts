@@ -21,7 +21,7 @@ export type AudioSources = {
   particles: boolean;
 };
 
-export type VoiceKind = "pad" | "strings" | "organ" | "flute" | "bell" | "wind";
+export type VoiceKind = "pad" | "strings" | "organ" | "flute" | "bell" | "bowl" | "wind";
 export type VoiceId = "auto" | VoiceKind;
 
 export const VOICES: { id: VoiceId; name: string; blurb: string }[] = [
@@ -31,6 +31,7 @@ export const VOICES: { id: VoiceId; name: string; blurb: string }[] = [
   { id: "organ", name: "Organ", blurb: "Czyste rejestry, jak flety organowe" },
   { id: "flute", name: "Flet", blurb: "Powietrzny, wyższy rejestr" },
   { id: "bell", name: "Dzwon", blurb: "Lekkie wybrzmienie, prawie oktawa" },
+  { id: "bowl", name: "Misa", blurb: "Dzwon tybetański — długie bicie, kwinta i falowanie" },
   { id: "wind", name: "Szum", blurb: "Miękki szum, bez syku" },
 ];
 
@@ -45,7 +46,7 @@ export function voiceName(id: VoiceKind): string {
 export function resolveVoice(id: VoiceId, m: FieldMetrics): VoiceKind {
   if (id !== "auto") return id;
   if (m.mag < 0.12) return "pad";
-  if (m.curlAbs > 0.45 && m.curlAbs > m.divAbs * 1.15) return "pad";
+  if (m.curlAbs > 0.45 && m.curlAbs > m.divAbs * 1.15) return "bowl";
   if (m.div > 0.35) return "strings";
   if (m.div < -0.35) return "organ";
   if (m.curlAbs > 0.2 && m.divAbs > 0.18) return "flute";
@@ -309,7 +310,8 @@ class FieldSynth {
     const organ = makeWave(ctx, [0, 1, 0.5, 0.06, 0.32, 0, 0.14, 0, 0.07]);
     const flute = makeWave(ctx, [0, 1, 0.1, 0.03]);
     const bell = makeWave(ctx, [0, 1, 0.1, 0.32, 0.05, 0.14]);
-    this.waves = { pad, strings, organ, flute, bell };
+    const bowl = makeWave(ctx, [0, 1, 0.09, 0.36, 0.07, 0.2, 0.04, 0.09]);
+    this.waves = { pad, strings, organ, flute, bell, bowl };
     this.drone.setPeriodicWave(pad);
     this.drone2.setPeriodicWave(pad);
     this.sub.setPeriodicWave(pad);
@@ -390,7 +392,7 @@ class FieldSynth {
     this.drone.setPeriodicWave(wave);
     this.drone2.setPeriodicWave(kind === "flute" || kind === "wind" ? pad : wave);
     this.sub.setPeriodicWave(pad);
-    this.probeOsc.setPeriodicWave(kind === "bell" ? wave : (flute ?? wave));
+    this.probeOsc.setPeriodicWave(kind === "bell" || kind === "bowl" ? wave : (flute ?? wave));
     const grainWave = kind === "strings" ? (flute ?? wave) : wave;
     for (const g of this.grains) g.osc.setPeriodicWave(grainWave);
     this.voice = kind;
@@ -466,7 +468,15 @@ class FieldSynth {
     const curlN = clamp(metrics.curlAbs / 2.4, 0, 1);
     const divN = clamp(metrics.div / 3, -1, 1);
     const register =
-      kind === "flute" ? 196 : kind === "bell" ? 147 : kind === "wind" ? 98 : 116.54;
+      kind === "flute"
+        ? 196
+        : kind === "bell"
+          ? 147
+          : kind === "bowl"
+            ? 110
+            : kind === "wind"
+              ? 98
+              : 116.54;
     let base = register * 2 ** (magN * 0.5);
     const ratio =
       kind === "bell"
@@ -493,39 +503,69 @@ class FieldSynth {
           ? 1500 + magN * 800
           : kind === "bell"
             ? 1000 + magN * 500
-            : kind === "organ"
-              ? 880 + magN * 720
-              : kind === "wind"
-                ? 380 + magN * 320
-                : 720 + magN * 780;
+            : kind === "bowl"
+              ? 780 + magN * 420
+              : kind === "organ"
+                ? 880 + magN * 720
+                : kind === "wind"
+                  ? 380 + magN * 320
+                  : 720 + magN * 780;
     const q =
       kind === "strings"
         ? 0.85
         : kind === "bell"
           ? 1.6
-          : kind === "flute"
-            ? 0.32
-            : kind === "organ"
-              ? 0.4
-              : 0.5;
+          : kind === "bowl"
+            ? 2.2
+            : kind === "flute"
+              ? 0.32
+              : kind === "organ"
+                ? 0.4
+                : 0.5;
     const droneMix =
-      kind === "wind" ? 0.04 : kind === "strings" ? 0.09 : kind === "bell" ? 0.1 : 0.13;
+      kind === "wind"
+        ? 0.04
+        : kind === "strings"
+          ? 0.09
+          : kind === "bell"
+            ? 0.1
+            : kind === "bowl"
+              ? 0.12
+              : 0.13;
     const secondMix =
-      kind === "wind" ? 0.02 : kind === "flute" ? 0.035 : kind === "organ" ? 0.07 : 0.048;
-    const subMix = kind === "wind" ? 0.045 : kind === "flute" ? 0.035 : 0.09;
+      kind === "wind"
+        ? 0.02
+        : kind === "flute"
+          ? 0.035
+          : kind === "organ"
+            ? 0.07
+            : kind === "bowl"
+              ? 0.1
+              : 0.048;
+    const subMix =
+      kind === "wind" ? 0.045 : kind === "flute" ? 0.035 : kind === "bowl" ? 0.08 : 0.09;
 
-    this.drone.frequency.setTargetAtTime(base, now, 0.12);
-    this.drone2.frequency.setTargetAtTime(second, now, 0.12);
-    this.sub.frequency.setTargetAtTime(sub, now, 0.14);
+    const glide = kind === "bowl" ? 0.22 : 0.12;
+    this.drone.frequency.setTargetAtTime(base, now, glide);
+    this.drone2.frequency.setTargetAtTime(second, now, glide);
+    this.sub.frequency.setTargetAtTime(sub, now, kind === "bowl" ? 0.26 : 0.14);
     this.drone2.detune.setTargetAtTime(
-      steps ? 0 : clamp(metrics.curl * 5, -8, 8),
+      kind === "bowl" ? 8 : steps ? 0 : clamp(metrics.curl * 5, -8, 8),
       now,
       0.16,
     );
     this.filter.frequency.setTargetAtTime(cut + divN * 80, now, 0.16);
     this.filter.Q.setTargetAtTime(q, now, 0.16);
-    this.warmth.frequency.setTargetAtTime(kind === "flute" ? 3200 : 2300, now, 0.2);
-    this.lfo.frequency.setTargetAtTime(0.06 + curlN * 1.6, now, 0.16);
+    this.warmth.frequency.setTargetAtTime(
+      kind === "flute" ? 3200 : kind === "bowl" ? 1700 : 2300,
+      now,
+      0.2,
+    );
+    this.lfo.frequency.setTargetAtTime(
+      kind === "bowl" ? 0.18 + curlN * 0.7 : 0.06 + curlN * 1.6,
+      now,
+      0.16,
+    );
     const spin = curlN * 0.38 * (metrics.curl >= 0 ? 1 : -1);
     this.lfoGain.gain.setTargetAtTime(spin, now, 0.16);
     this.lfoGain2.gain.setTargetAtTime(-spin * 0.8, now, 0.16);
@@ -539,11 +579,21 @@ class FieldSynth {
     );
     this.subGain.gain.setTargetAtTime(subMix * magN * fieldAmp * live, now, 0.12);
     this.noiseFilter.frequency.setTargetAtTime(
-      kind === "wind" ? 320 + magN * 220 : kind === "flute" ? 1900 : 700 + magN * 400,
+      kind === "wind"
+        ? 320 + magN * 220
+        : kind === "flute"
+          ? 1900
+          : kind === "bowl"
+            ? 1400 + magN * 400
+            : 700 + magN * 400,
       now,
       0.14,
     );
-    this.noiseFilter.Q.setTargetAtTime(kind === "wind" ? 0.7 : 0.9, now, 0.14);
+    this.noiseFilter.Q.setTargetAtTime(
+      kind === "wind" ? 0.7 : kind === "bowl" ? 1.6 : 0.9,
+      now,
+      0.14,
+    );
     const noiseMix =
       kind === "wind"
         ? 0.08 * (0.4 + magN)
@@ -551,7 +601,9 @@ class FieldSynth {
           ? 0.01
           : kind === "bell"
             ? 0.006 * magN
-            : 0.0035 * curlN;
+            : kind === "bowl"
+              ? 0.014 * magN
+              : 0.0035 * curlN;
     this.noiseGain.gain.setTargetAtTime(noiseMix * fieldAmp * live, now, 0.12);
 
     if (sources.probe && probe && probe.mag > 1e-6) {
