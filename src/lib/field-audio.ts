@@ -617,14 +617,15 @@ export function useFieldAudio({
 
   useEffect(() => {
     if (!listening) return;
-    let raf = 0;
+    let timer = 0;
     let last = performance.now();
     let sim = 0;
     let lastUi = 0;
     let running = true;
-    const loop = (now: number) => {
+    const loop = () => {
       if (!running) return;
-      const dt = Math.min(0.033, (now - last) / 1000);
+      const now = performance.now();
+      const dt = Math.min(0.05, (now - last) / 1000);
       last = now;
       const p = propsRef.current;
       if (p.playing) sim += dt;
@@ -641,24 +642,22 @@ export function useFieldAudio({
         metrics: m,
         voice: p.voice,
       });
-      if (now - lastUi > 80) {
+      if (!document.hidden && now - lastUi > 80) {
         lastUi = now;
         setMetrics(m);
         setHz(synthRef.current?.readHz() ?? null);
       }
-      raf = requestAnimationFrame(loop);
     };
-    raf = requestAnimationFrame(loop);
+    timer = window.setInterval(loop, 40);
+    loop();
     const onVis = () => {
-      const synth = synthRef.current;
-      if (!synth || !listeningRef.current) return;
-      if (document.hidden) synth.stop();
-      else void synth.start();
+      if (!wantedRef.current || !listeningRef.current) return;
+      if (!document.hidden) void synthRef.current?.start();
     };
     document.addEventListener("visibilitychange", onVis);
     return () => {
       running = false;
-      cancelAnimationFrame(raf);
+      window.clearInterval(timer);
       document.removeEventListener("visibilitychange", onVis);
     };
   }, [listening]);
