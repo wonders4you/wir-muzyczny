@@ -26,6 +26,7 @@ import {
 } from "@/lib/field-math";
 import { DEFAULT_PRESET, FEATURED_PRESETS, PRESETS } from "@/lib/presets";
 import { useFieldAudio, speakerParts, type AudioSources, type SpeakerHz, isVoiceId, type VoiceId, isScaleId, type ScaleId } from "@/lib/field-audio";
+import { DEFAULT_TUNE_ID, isTuneId } from "@/lib/tunes";
 import {
   mapTilt,
   specFor,
@@ -63,6 +64,8 @@ type Saved = {
   listenParticles: boolean;
   voice: VoiceId;
   scale: ScaleId;
+  musicOn: boolean;
+  tuneId: string;
   recentIds: string[];
   pitchTarget: TiltTarget;
   rollTarget: TiltTarget;
@@ -144,6 +147,8 @@ export function FieldStudio() {
   });
   const [voice, setVoice] = useState<VoiceId>("auto");
   const [scale, setScale] = useState<ScaleId>("penta");
+  const [musicOn, setMusicOn] = useState(false);
+  const [tuneId, setTuneId] = useState(DEFAULT_TUNE_ID);
   const [probe, setProbe] = useState<ProbeReadout | null>(null);
   const [resetToken, setResetToken] = useState(0);
   const [hydrated, setHydrated] = useState(false);
@@ -201,6 +206,8 @@ export function FieldStudio() {
       }));
       if (isVoiceId(saved.voice)) setVoice(saved.voice);
       if (isScaleId(saved.scale)) setScale(saved.scale);
+      if (typeof saved.musicOn === "boolean") setMusicOn(saved.musicOn);
+      if (isTuneId(saved.tuneId)) setTuneId(saved.tuneId);
       if (Array.isArray(saved.recentIds)) {
         const valid = saved.recentIds.filter(
           (id): id is string =>
@@ -241,6 +248,8 @@ export function FieldStudio() {
       listenParticles: sources.particles,
       voice,
       scale,
+      musicOn,
+      tuneId,
       recentIds,
       pitchTarget,
       rollTarget,
@@ -268,6 +277,8 @@ export function FieldStudio() {
     sources,
     voice,
     scale,
+    musicOn,
+    tuneId,
     recentIds,
     pitchTarget,
     rollTarget,
@@ -290,6 +301,8 @@ export function FieldStudio() {
     sources,
     voice,
     scale,
+    musicOn,
+    tuneId,
   });
 
   const tilt = useDeviceTilt(tiltOn);
@@ -585,6 +598,10 @@ export function FieldStudio() {
                 onVoice={setVoice}
                 scale={scale}
                 onScale={setScale}
+                musicOn={musicOn}
+                onMusicOn={setMusicOn}
+                tuneId={tuneId}
+                onTuneId={setTuneId}
                 metrics={audio.metrics}
                 analyser={audio.analyser}
                 playing={playing}

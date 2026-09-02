@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { CompiledField } from "@/lib/field-math";
+import { midiToHz, noteAt, tuneById } from "@/lib/tunes";
 
 export type AudioProbe = {
   x: number;
@@ -59,6 +60,7 @@ export type SpeakerHz = {
   second: number | null;
   sub: number | null;
   probe: number | null;
+  melody: number | null;
   spin: number;
   live: boolean;
 };
@@ -72,6 +74,7 @@ export function formatHz(n: number): string {
 
 export function speakerParts(hz: SpeakerHz): string[] {
   const parts: string[] = [];
+  if (hz.melody != null) parts.push(`nuta ${formatHz(hz.melody)}`);
   if (hz.field != null) parts.push(formatHz(hz.field));
   if (hz.second != null) parts.push(formatHz(hz.second));
   if (hz.sub != null) parts.push(formatHz(hz.sub));
@@ -246,6 +249,9 @@ class FieldSynth {
   private probeOsc: OscillatorNode;
   private probeGain: GainNode;
   private probePan: StereoPannerNode;
+  private melody: OscillatorNode;
+  private melodyGain: GainNode;
+  private melodyPan: StereoPannerNode;
   private grains: Array<{
     osc: OscillatorNode;
     gain: GainNode;
@@ -258,6 +264,9 @@ class FieldSynth {
   private waves: Partial<Record<VoiceKind, PeriodicWave>> = {};
   private scale: ScaleId = "penta";
   private held = { drone: 0, drone2: 0, sub: 0, probe: 0 };
+  private musicClock = 0;
+  private lastTuneId: string | null = null;
+  private lastMidi: number | null = null;
 
   constructor() {
     this.ctx = new AudioContext();
@@ -299,6 +308,9 @@ class FieldSynth {
     this.probeOsc = this.ctx.createOscillator();
     this.probeGain = this.ctx.createGain();
     this.probePan = this.ctx.createStereoPanner();
+    this.melody = this.ctx.createOscillator();
+    this.melodyGain = this.ctx.createGain();
+    this.melodyPan = this.ctx.createStereoPanner();
     this.grains = [];
   }
 
@@ -360,6 +372,13 @@ class FieldSynth {
     this.probeGain.connect(this.probePan);
     this.probePan.connect(this.master);
 
+    this.melody.setPeriodicWave(flute);
+    this.melody.frequency.value = 220;
+    this.melodyGain.gain.value = 0;
+    this.melody.connect(this.melodyGain);
+    this.melodyGain.connect(this.melodyPan);
+    this.melodyPan.connect(this.master);
+
     for (let i = 0; i < 5; i += 1) {
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
@@ -379,6 +398,7 @@ class FieldSynth {
     this.lfo.start();
     this.noise.start();
     this.probeOsc.start();
+    this.melody.start();
     for (const g of this.grains) g.osc.start();
     this.built = true;
   }
@@ -393,6 +413,7 @@ class FieldSynth {
     this.drone2.setPeriodicWave(kind === "flute" || kind === "wind" ? pad : wave);
     this.sub.setPeriodicWave(pad);
     this.probeOsc.setPeriodicWave(kind === "bell" || kind === "bowl" ? wave : (flute ?? wave));
+    this.melody.setPeriodicWave(kind === "wind" ? pad : wave);
     const grainWave = kind === "strings" ? (flute ?? wave) : wave;
     for (const g of this.grains) g.osc.setPeriodicWave(grainWave);
     this.voice = kind;
@@ -452,11 +473,26 @@ class FieldSynth {
     metrics: FieldMetrics;
     voice: VoiceId;
     scale: ScaleId;
+    musicOn: boolean;
+    tuneId: string;
   }) {
     if (!this.built || this.ctx.state !== "running") return;
     const now = this.ctx.currentTime;
-    const { domain, dt, speed, playing, probe, sources, metrics, field, t, voice, scale } =
-      opts;
+    const {
+      domain,
+      dt,
+      speed,
+      playing,
+      probe,
+      sources,
+      metrics,
+      field,
+      t,
+      voice,
+      scale,
+      musicOn,
+      tuneId,
+    } = opts;
     if (scale !== this.scale) {
       this.scale = scale;
       this.held = { drone: 0, drone2: 0, sub: 0, probe: 0 };
@@ -571,13 +607,49 @@ class FieldSynth {
     this.lfoGain2.gain.setTargetAtTime(-spin * 0.8, now, 0.16);
 
     const fieldAmp = sources.field && playing ? 1 : 0;
-    this.droneGain.gain.setTargetAtTime(droneMix * magN * fieldAmp * live, now, 0.1);
+    let melodyHz: number | null = null;
+    if (musicOn) {
+      if (this.lastTuneId !== tuneId) {
+        this.lastTuneId = tuneId;
+        this.musicClock = 0;
+        this.lastMidi = null;
+      }
+      if (playing) this.musicClock += dt;
+      const tune = tuneById(tuneId);
+      const note = noteAt(tune, this.musicClock);
+      if (note.midi != null) {
+        melodyHz = midiToHz(note.midi);
+        const port = tune.legato && this.lastMidi != null ? 0.045 : 0.008;
+        this.melody.frequency.setTargetAtTime(melodyHz, now, port);
+        this.lastMidi = note.midi;
+        this.melodyGain.gain.setTargetAtTime(
+          0.12 * (0.55 + magN * 0.45) * live,
+          now,
+          0.04,
+        );
+        this.melodyPan.pan.setTargetAtTime(
+          clamp(metrics.curl / 2.2, -0.85, 0.85),
+          now,
+          0.12,
+        );
+      } else {
+        this.melodyGain.gain.setTargetAtTime(0, now, 0.06);
+        this.lastMidi = null;
+      }
+    } else {
+      this.musicClock = 0;
+      this.lastTuneId = null;
+      this.lastMidi = null;
+      this.melodyGain.gain.setTargetAtTime(0, now, 0.08);
+    }
+    const bed = musicOn ? 0.4 : 1;
+    this.droneGain.gain.setTargetAtTime(droneMix * magN * fieldAmp * live * bed, now, 0.1);
     this.drone2Gain.gain.setTargetAtTime(
-      secondMix * (0.35 + curlN * 0.5) * fieldAmp * live,
+      secondMix * (0.35 + curlN * 0.5) * fieldAmp * live * bed,
       now,
       0.1,
     );
-    this.subGain.gain.setTargetAtTime(subMix * magN * fieldAmp * live, now, 0.12);
+    this.subGain.gain.setTargetAtTime(subMix * magN * fieldAmp * live * bed, now, 0.12);
     this.noiseFilter.frequency.setTargetAtTime(
       kind === "wind"
         ? 320 + magN * 220
@@ -642,8 +714,9 @@ class FieldSynth {
       const grainRatio = steps
         ? (steps[i % steps.length] ?? 1)
         : (GRAIN_RATIOS[i] ?? 1);
+      const root = melodyHz ?? base;
       const freq = clamp(
-        steps ? snapToScale(base * grainRatio, steps) : base * grainRatio,
+        steps && !melodyHz ? snapToScale(root * grainRatio, steps) : root * grainRatio,
         80,
         720,
       );
@@ -659,14 +732,16 @@ class FieldSynth {
     const secondOn = audible(this.drone2Gain);
     const subOn = audible(this.subGain);
     const probeOn = audible(this.probeGain);
+    const melodyOn = audible(this.melodyGain);
     const grainsOn = this.grains.some((g) => audible(g.gain));
     return {
       field: fieldOn ? this.drone.frequency.value : null,
       second: secondOn ? this.drone2.frequency.value : null,
       sub: subOn ? this.sub.frequency.value : null,
       probe: probeOn ? this.probeOsc.frequency.value : null,
+      melody: melodyOn ? this.melody.frequency.value : null,
       spin: this.lfo.frequency.value,
-      live: fieldOn || secondOn || subOn || probeOn || grainsOn,
+      live: fieldOn || secondOn || subOn || probeOn || melodyOn || grainsOn,
     };
   }
 }
@@ -681,6 +756,8 @@ type HookArgs = {
   sources: AudioSources;
   voice: VoiceId;
   scale: ScaleId;
+  musicOn: boolean;
+  tuneId: string;
 };
 
 export function useFieldAudio({
@@ -693,10 +770,36 @@ export function useFieldAudio({
   sources,
   voice,
   scale,
+  musicOn,
+  tuneId,
 }: HookArgs) {
   const synthRef = useRef<FieldSynth | null>(null);
-  const propsRef = useRef({ field, domain, playing, speed, probe, volume, sources, voice, scale });
-  propsRef.current = { field, domain, playing, speed, probe, volume, sources, voice, scale };
+  const propsRef = useRef({
+    field,
+    domain,
+    playing,
+    speed,
+    probe,
+    volume,
+    sources,
+    voice,
+    scale,
+    musicOn,
+    tuneId,
+  });
+  propsRef.current = {
+    field,
+    domain,
+    playing,
+    speed,
+    probe,
+    volume,
+    sources,
+    voice,
+    scale,
+    musicOn,
+    tuneId,
+  };
   const [listening, setListening] = useState(false);
   const [metrics, setMetrics] = useState<FieldMetrics | null>(null);
   const [hz, setHz] = useState<SpeakerHz | null>(null);
@@ -771,6 +874,8 @@ export function useFieldAudio({
         metrics: m,
         voice: p.voice,
         scale: p.scale,
+        musicOn: p.musicOn,
+        tuneId: p.tuneId,
       });
       if (!document.hidden && now - lastUi > 80) {
         lastUi = now;

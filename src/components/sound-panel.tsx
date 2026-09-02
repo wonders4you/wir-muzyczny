@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Slider } from "@/components/ui/slider";
+import { Switch } from "@/components/ui/switch";
 import {
   describeTimbre,
   formatHz,
@@ -18,6 +19,7 @@ import {
   type VoiceId,
 } from "@/lib/field-audio";
 import { formatPlain } from "@/lib/field-math";
+import { TUNES } from "@/lib/tunes";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -32,6 +34,10 @@ type Props = {
   onVoice: (next: VoiceId) => void;
   scale: ScaleId;
   onScale: (next: ScaleId) => void;
+  musicOn: boolean;
+  onMusicOn: (next: boolean) => void;
+  tuneId: string;
+  onTuneId: (next: string) => void;
   metrics: FieldMetrics | null;
   analyser: AnalyserNode | null;
   playing: boolean;
@@ -51,6 +57,10 @@ export function SoundPanel({
   onVoice,
   scale,
   onScale,
+  musicOn,
+  onMusicOn,
+  tuneId,
+  onTuneId,
   metrics,
   analyser,
   playing,
@@ -182,6 +192,47 @@ export function SoundPanel({
       <Separator />
 
       <div className="space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          <Label htmlFor="music-toggle">Odtwarzaj muzykę</Label>
+          <Switch
+            id="music-toggle"
+            checked={musicOn}
+            onCheckedChange={onMusicOn}
+          />
+        </div>
+        <label className="block">
+          <span className="sr-only">Utwór</span>
+          <select
+            value={tuneId}
+            disabled={!musicOn}
+            onChange={(e) => onTuneId(e.target.value)}
+            className="h-11 w-full min-w-0 rounded-md bg-background px-3 text-sm text-foreground shadow-[var(--shadow-border)] outline-none disabled:opacity-40"
+          >
+            <optgroup label="Beethoven">
+              {TUNES.filter((t) => t.composer === "Beethoven").map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
+              ))}
+            </optgroup>
+            <optgroup label="Chopin">
+              {TUNES.filter((t) => t.composer === "Chopin").map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
+              ))}
+            </optgroup>
+          </select>
+        </label>
+        <p className="text-xs text-muted-foreground">
+          Melodia na wirze — |F| głośność, skręt stereo, barwa z chipów.
+          Pauza zatrzymuje nuty. Same motywy, domena publiczna.
+        </p>
+      </div>
+
+      <Separator />
+
+      <div className="space-y-3">
         <p className="text-xs font-medium tracking-wide text-muted-foreground">
           Źródła
         </p>
@@ -220,7 +271,8 @@ export function SpeakerHzStrip({ hz }: { hz: SpeakerHz | null }) {
         Hz w głośniku
       </p>
       {hz && hz.live ? (
-        <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1.5 font-mono text-xs tabular-nums sm:grid-cols-4">
+        <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1.5 font-mono text-xs tabular-nums sm:grid-cols-5">
+          <HzCell label="nuta" value={hz.melody} />
           <HzCell label="ton" value={hz.field} />
           <HzCell label="drugi" value={hz.second} />
           <HzCell label="sub" value={hz.sub} />
