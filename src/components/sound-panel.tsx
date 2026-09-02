@@ -225,8 +225,8 @@ export function SoundPanel({
           </select>
         </label>
         <p className="text-xs text-muted-foreground">
-          Melodia cicho na wirze, strój A = 430 Hz — łagodne ześlizgi, |F|
-          głośność, skręt stereo. Pauza zatrzymuje. Motywy z domeny publicznej.
+          Dłuższe frazy, pętla z oddechem na ok. 10 min. Strój A = 430 Hz,
+          łagodne ześlizgi. Pauza zatrzymuje. Melodie z domeny publicznej.
         </p>
       </div>
 
