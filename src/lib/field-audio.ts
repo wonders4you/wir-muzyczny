@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { CompiledField } from "@/lib/field-math";
-import { midiToHz, noteAt, tuneById } from "@/lib/tunes";
+import { CONCERT_A, midiToHz, noteAt, tuneById } from "@/lib/tunes";
 
 export type AudioProbe = {
   x: number;
@@ -98,7 +98,7 @@ export function isScaleId(v: unknown): v is ScaleId {
   return SCALES.some((item) => item.id === v);
 }
 
-const TONIC = 110;
+const TONIC = CONCERT_A / 4;
 const PENTA_RATIOS = [1, 9 / 8, 5 / 4, 3 / 2, 5 / 3] as const;
 const JUST_RATIOS = [1, 9 / 8, 5 / 4, 4 / 3, 3 / 2, 5 / 3, 15 / 8] as const;
 

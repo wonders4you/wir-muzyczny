@@ -119,8 +119,10 @@ export function tuneById(id: string | null | undefined): Tune {
   return TUNES.find((t) => t.id === id) ?? TUNES[0]!;
 }
 
+export const CONCERT_A = 430;
+
 export function midiToHz(midi: number) {
-  return 440 * 2 ** ((midi - 69) / 12);
+  return CONCERT_A * 2 ** ((midi - 69) / 12);
 }
 
 export function noteAt(tune: Tune, seconds: number): TuneNote {
