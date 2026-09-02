@@ -25,7 +25,7 @@ export const TUNES: Tune[] = [
     id: "beethoven-ode",
     name: "Oda do radości",
     composer: "Beethoven",
-    bpm: 104,
+    bpm: 88,
     legato: true,
     notes: phrase(`
       64:1 64:1 65:1 67:1 67:1 65:1 64:1 62:1
@@ -38,8 +38,8 @@ export const TUNES: Tune[] = [
     id: "beethoven-elise",
     name: "Dla Elizy",
     composer: "Beethoven",
-    bpm: 72,
-    legato: false,
+    bpm: 58,
+    legato: true,
     notes: phrase(`
       76:0.5 75:0.5 76:0.5 75:0.5 76:0.5 71:0.5 74:0.5 72:0.5 69:1.5
       r:0.5 60:0.5 64:0.5 69:0.5 71:1.5
@@ -51,8 +51,8 @@ export const TUNES: Tune[] = [
     id: "beethoven-fifth",
     name: "V symfonia",
     composer: "Beethoven",
-    bpm: 96,
-    legato: false,
+    bpm: 68,
+    legato: true,
     notes: phrase(`
       67:0.4 67:0.4 67:0.4 63:1.8 r:1
       65:0.4 65:0.4 65:0.4 62:1.8 r:1.2
@@ -62,7 +62,7 @@ export const TUNES: Tune[] = [
     id: "chopin-prelude7",
     name: "Preludium A-dur",
     composer: "Chopin",
-    bpm: 56,
+    bpm: 48,
     legato: true,
     notes: phrase(`
       76:1 73:1 69:1 76:1 73:1 69:1
@@ -75,7 +75,7 @@ export const TUNES: Tune[] = [
     id: "chopin-nocturne",
     name: "Nokturn Es-dur",
     composer: "Chopin",
-    bpm: 58,
+    bpm: 50,
     legato: true,
     notes: phrase(`
       r:0.5 70:0.5 75:0.5 79:1 82:1
@@ -88,7 +88,7 @@ export const TUNES: Tune[] = [
     id: "chopin-prelude4",
     name: "Preludium e-moll",
     composer: "Chopin",
-    bpm: 48,
+    bpm: 42,
     legato: true,
     notes: phrase(`
       71:3 69:3 67:3 66:3
@@ -100,7 +100,7 @@ export const TUNES: Tune[] = [
     id: "chopin-waltz",
     name: "Walc cis-moll",
     composer: "Chopin",
-    bpm: 84,
+    bpm: 66,
     legato: true,
     notes: phrase(`
       68:1 73:1 76:1 75:0.5 73:0.5 71:1 70:1 68:2

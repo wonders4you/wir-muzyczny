@@ -619,30 +619,29 @@ class FieldSynth {
       const note = noteAt(tune, this.musicClock);
       if (note.midi != null) {
         melodyHz = midiToHz(note.midi);
-        const port = tune.legato && this.lastMidi != null ? 0.045 : 0.008;
-        this.melody.frequency.setTargetAtTime(melodyHz, now, port);
+        this.melody.frequency.setTargetAtTime(melodyHz, now, 0.16);
         this.lastMidi = note.midi;
         this.melodyGain.gain.setTargetAtTime(
-          0.12 * (0.55 + magN * 0.45) * live,
+          0.045 * (0.4 + magN * 0.5) * live,
           now,
-          0.04,
+          0.14,
         );
         this.melodyPan.pan.setTargetAtTime(
-          clamp(metrics.curl / 2.2, -0.85, 0.85),
+          clamp(metrics.curl / 2.8, -0.55, 0.55),
           now,
-          0.12,
+          0.22,
         );
       } else {
-        this.melodyGain.gain.setTargetAtTime(0, now, 0.06);
+        this.melodyGain.gain.setTargetAtTime(0, now, 0.22);
         this.lastMidi = null;
       }
     } else {
       this.musicClock = 0;
       this.lastTuneId = null;
       this.lastMidi = null;
-      this.melodyGain.gain.setTargetAtTime(0, now, 0.08);
+      this.melodyGain.gain.setTargetAtTime(0, now, 0.2);
     }
-    const bed = musicOn ? 0.4 : 1;
+    const bed = musicOn ? 0.72 : 1;
     this.droneGain.gain.setTargetAtTime(droneMix * magN * fieldAmp * live * bed, now, 0.1);
     this.drone2Gain.gain.setTargetAtTime(
       secondMix * (0.35 + curlN * 0.5) * fieldAmp * live * bed,

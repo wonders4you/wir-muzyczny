@@ -225,8 +225,8 @@ export function SoundPanel({
           </select>
         </label>
         <p className="text-xs text-muted-foreground">
-          Melodia na wirze — |F| głośność, skręt stereo, barwa z chipów.
-          Pauza zatrzymuje nuty. Same motywy, domena publiczna.
+          Melodia cicho na wirze — łagodne ześlizgi między nutami, |F| głośność,
+          skręt stereo. Pauza zatrzymuje. Motywy z domeny publicznej.
         </p>
       </div>
 
