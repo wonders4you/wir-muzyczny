@@ -10,8 +10,10 @@ import {
   resolveVoice,
   voiceName,
   VOICES,
+  SCALES,
   type AudioSources,
   type FieldMetrics,
+  type ScaleId,
   type SpeakerHz,
   type VoiceId,
 } from "@/lib/field-audio";
@@ -28,6 +30,8 @@ type Props = {
   onSources: (next: AudioSources) => void;
   voice: VoiceId;
   onVoice: (next: VoiceId) => void;
+  scale: ScaleId;
+  onScale: (next: ScaleId) => void;
   metrics: FieldMetrics | null;
   analyser: AnalyserNode | null;
   playing: boolean;
@@ -45,6 +49,8 @@ export function SoundPanel({
   onSources,
   voice,
   onVoice,
+  scale,
+  onScale,
   metrics,
   analyser,
   playing,
@@ -61,7 +67,7 @@ export function SoundPanel({
         </h2>
         <p className="mt-1 text-xs text-muted-foreground">
           Fala z pola {presetName.toLowerCase()} — skręt kręci stereo, |F| ustala
-          ton, dywergencja jasność. Barwa to kształt fali, nie równanie.
+          stopień skali, dywergencja jasność.
         </p>
       </div>
 
@@ -147,6 +153,29 @@ export function SoundPanel({
         </div>
         <p className="text-xs text-muted-foreground">
           {VOICES.find((item) => item.id === voice)?.blurb}
+        </p>
+      </div>
+
+      <Separator />
+
+      <div className="space-y-3">
+        <p className="text-xs font-medium tracking-wide text-muted-foreground">
+          Skala
+        </p>
+        <div className="flex flex-wrap gap-1.5">
+          {SCALES.map((item) => (
+            <VoiceToggle
+              key={item.id}
+              pressed={scale === item.id}
+              label={item.name}
+              onPressedChange={(on) => {
+                if (on) onScale(item.id);
+              }}
+            />
+          ))}
+        </div>
+        <p className="text-xs text-muted-foreground">
+          {SCALES.find((item) => item.id === scale)?.blurb}
         </p>
       </div>
 

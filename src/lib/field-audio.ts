@@ -82,6 +82,52 @@ function clamp(n: number, lo: number, hi: number) {
   return Math.min(hi, Math.max(lo, n));
 }
 
+export type ScaleId = "free" | "penta" | "just";
+
+export const SCALES: { id: ScaleId; name: string; blurb: string }[] = [
+  { id: "free", name: "Ciągła", blurb: "Wysokość płynie z |F|, bez stopni" },
+  { id: "penta", name: "Pentatonika", blurb: "Pięć czystych stopni od A: 1 · 9/8 · 5/4 · 3/2 · 5/3" },
+  { id: "just", name: "Just", blurb: "Czysty dur: tercja 5:4, kwarta 4:3, kwinta 3:2" },
+];
+
+export function isScaleId(v: unknown): v is ScaleId {
+  return SCALES.some((item) => item.id === v);
+}
+
+const TONIC = 110;
+const PENTA_RATIOS = [1, 9 / 8, 5 / 4, 3 / 2, 5 / 3] as const;
+const JUST_RATIOS = [1, 9 / 8, 5 / 4, 4 / 3, 3 / 2, 5 / 3, 15 / 8] as const;
+
+function ratiosFor(scale: ScaleId): readonly number[] | null {
+  if (scale === "penta") return PENTA_RATIOS;
+  if (scale === "just") return JUST_RATIOS;
+  return null;
+}
+
+export function snapToScale(freq: number, ratios: readonly number[]): number {
+  if (!(freq > 0) || !Number.isFinite(freq)) return freq;
+  const log = Math.log2(freq / TONIC);
+  const oct = Math.floor(log);
+  const pos = 2 ** (log - oct);
+  let best = 1;
+  let bestDist = Infinity;
+  for (const r of ratios) {
+    for (const cand of [r / 2, r, r * 2]) {
+      const d = Math.abs(Math.log2(pos / cand));
+      if (d < bestDist) {
+        bestDist = d;
+        best = cand;
+      }
+    }
+  }
+  return TONIC * 2 ** oct * best;
+}
+
+function holdSnap(prev: number, next: number) {
+  if (prev > 0 && Math.abs(Math.log2(next / prev)) < 0.03) return prev;
+  return next;
+}
+
 export function sampleMetrics(
   field: CompiledField,
   domain: number,
@@ -209,6 +255,8 @@ class FieldSynth {
   private volume = 0.45;
   private voice: VoiceKind = "pad";
   private waves: Partial<Record<VoiceKind, PeriodicWave>> = {};
+  private scale: ScaleId = "penta";
+  private held = { drone: 0, drone2: 0, sub: 0, probe: 0 };
 
   constructor() {
     this.ctx = new AudioContext();
@@ -401,11 +449,16 @@ class FieldSynth {
     sources: AudioSources;
     metrics: FieldMetrics;
     voice: VoiceId;
+    scale: ScaleId;
   }) {
     if (!this.built || this.ctx.state !== "running") return;
     const now = this.ctx.currentTime;
-    const { domain, dt, speed, playing, probe, sources, metrics, field, t, voice } =
+    const { domain, dt, speed, playing, probe, sources, metrics, field, t, voice, scale } =
       opts;
+    if (scale !== this.scale) {
+      this.scale = scale;
+      this.held = { drone: 0, drone2: 0, sub: 0, probe: 0 };
+    }
     const kind = resolveVoice(voice, metrics);
     this.applyVoice(kind);
     const live = playing ? 1 : 0.0008;
@@ -414,15 +467,25 @@ class FieldSynth {
     const divN = clamp(metrics.div / 3, -1, 1);
     const register =
       kind === "flute" ? 196 : kind === "bell" ? 147 : kind === "wind" ? 98 : 116.54;
-    const base = register * 2 ** (magN * 0.5);
+    let base = register * 2 ** (magN * 0.5);
     const ratio =
       kind === "bell"
-        ? 2.003
+        ? 2
         : kind === "organ" || kind === "flute"
           ? 2
           : kind === "wind"
-            ? 1.0015
-            : 1.5;
+            ? 1
+            : 3 / 2;
+    const steps = ratiosFor(scale);
+    const tune = (hz: number, key: keyof typeof this.held) => {
+      if (!steps) return hz;
+      const snapped = holdSnap(this.held[key], snapToScale(hz, steps));
+      this.held[key] = snapped;
+      return snapped;
+    };
+    base = tune(base, "drone");
+    const second = tune(base * (ratio === 1 ? 1.0015 : ratio), "drone2");
+    const sub = tune(base * 0.5, "sub");
     const cut =
       kind === "strings"
         ? 620 + magN * 680
@@ -452,9 +515,13 @@ class FieldSynth {
     const subMix = kind === "wind" ? 0.045 : kind === "flute" ? 0.035 : 0.09;
 
     this.drone.frequency.setTargetAtTime(base, now, 0.12);
-    this.drone2.frequency.setTargetAtTime(base * ratio, now, 0.12);
-    this.sub.frequency.setTargetAtTime(base * 0.5, now, 0.14);
-    this.drone2.detune.setTargetAtTime(clamp(metrics.curl * 5, -8, 8), now, 0.16);
+    this.drone2.frequency.setTargetAtTime(second, now, 0.12);
+    this.sub.frequency.setTargetAtTime(sub, now, 0.14);
+    this.drone2.detune.setTargetAtTime(
+      steps ? 0 : clamp(metrics.curl * 5, -8, 8),
+      now,
+      0.16,
+    );
     this.filter.frequency.setTargetAtTime(cut + divN * 80, now, 0.16);
     this.filter.Q.setTargetAtTime(q, now, 0.16);
     this.warmth.frequency.setTargetAtTime(kind === "flute" ? 3200 : 2300, now, 0.2);
@@ -489,7 +556,8 @@ class FieldSynth {
 
     if (sources.probe && probe && probe.mag > 1e-6) {
       const pMag = clamp(probe.mag / 4, 0, 1);
-      const freq = clamp(160 + (probe.y / domain) * 90 + pMag * 70, 80, 720);
+      let freq = clamp(160 + (probe.y / domain) * 90 + pMag * 70, 80, 720);
+      freq = tune(freq, "probe");
       this.probeOsc.frequency.setTargetAtTime(freq, now, 0.04);
       this.probePan.pan.setTargetAtTime(
         clamp(probe.x / domain, -0.9, 0.9),
@@ -519,7 +587,14 @@ class FieldSynth {
           w.y = (Math.random() * 2 - 1) * domain * 0.85;
         }
       }
-      const freq = clamp(base * (GRAIN_RATIOS[i] ?? 1), 80, 720);
+      const grainRatio = steps
+        ? (steps[i % steps.length] ?? 1)
+        : (GRAIN_RATIOS[i] ?? 1);
+      const freq = clamp(
+        steps ? snapToScale(base * grainRatio, steps) : base * grainRatio,
+        80,
+        720,
+      );
       g.osc.frequency.setTargetAtTime(freq, now, 0.1);
       g.pan.pan.setTargetAtTime(clamp(w.x / domain, -0.95, 0.95), now, 0.1);
       g.gain.gain.setTargetAtTime(0.014 * grainAmp * live, now, 0.1);
@@ -553,6 +628,7 @@ type HookArgs = {
   volume: number;
   sources: AudioSources;
   voice: VoiceId;
+  scale: ScaleId;
 };
 
 export function useFieldAudio({
@@ -564,10 +640,11 @@ export function useFieldAudio({
   volume,
   sources,
   voice,
+  scale,
 }: HookArgs) {
   const synthRef = useRef<FieldSynth | null>(null);
-  const propsRef = useRef({ field, domain, playing, speed, probe, volume, sources, voice });
-  propsRef.current = { field, domain, playing, speed, probe, volume, sources, voice };
+  const propsRef = useRef({ field, domain, playing, speed, probe, volume, sources, voice, scale });
+  propsRef.current = { field, domain, playing, speed, probe, volume, sources, voice, scale };
   const [listening, setListening] = useState(false);
   const [metrics, setMetrics] = useState<FieldMetrics | null>(null);
   const [hz, setHz] = useState<SpeakerHz | null>(null);
@@ -641,6 +718,7 @@ export function useFieldAudio({
         sources: p.sources,
         metrics: m,
         voice: p.voice,
+        scale: p.scale,
       });
       if (!document.hidden && now - lastUi > 80) {
         lastUi = now;

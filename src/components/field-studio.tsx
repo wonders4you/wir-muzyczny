@@ -25,7 +25,7 @@ import {
   type CompiledField,
 } from "@/lib/field-math";
 import { DEFAULT_PRESET, FEATURED_PRESETS, PRESETS } from "@/lib/presets";
-import { useFieldAudio, speakerParts, type AudioSources, type SpeakerHz, isVoiceId, type VoiceId } from "@/lib/field-audio";
+import { useFieldAudio, speakerParts, type AudioSources, type SpeakerHz, isVoiceId, type VoiceId, isScaleId, type ScaleId } from "@/lib/field-audio";
 import {
   mapTilt,
   specFor,
@@ -62,6 +62,7 @@ type Saved = {
   listenProbe: boolean;
   listenParticles: boolean;
   voice: VoiceId;
+  scale: ScaleId;
   recentIds: string[];
   pitchTarget: TiltTarget;
   rollTarget: TiltTarget;
@@ -142,6 +143,7 @@ export function FieldStudio() {
     particles: true,
   });
   const [voice, setVoice] = useState<VoiceId>("auto");
+  const [scale, setScale] = useState<ScaleId>("penta");
   const [probe, setProbe] = useState<ProbeReadout | null>(null);
   const [resetToken, setResetToken] = useState(0);
   const [hydrated, setHydrated] = useState(false);
@@ -198,6 +200,7 @@ export function FieldStudio() {
             : prev.particles,
       }));
       if (isVoiceId(saved.voice)) setVoice(saved.voice);
+      if (isScaleId(saved.scale)) setScale(saved.scale);
       if (Array.isArray(saved.recentIds)) {
         const valid = saved.recentIds.filter(
           (id): id is string =>
@@ -237,6 +240,7 @@ export function FieldStudio() {
       listenProbe: sources.probe,
       listenParticles: sources.particles,
       voice,
+      scale,
       recentIds,
       pitchTarget,
       rollTarget,
@@ -263,6 +267,7 @@ export function FieldStudio() {
     volume,
     sources,
     voice,
+    scale,
     recentIds,
     pitchTarget,
     rollTarget,
@@ -284,6 +289,7 @@ export function FieldStudio() {
     volume,
     sources,
     voice,
+    scale,
   });
 
   const tilt = useDeviceTilt(tiltOn);
@@ -577,6 +583,8 @@ export function FieldStudio() {
                 onSources={setSources}
                 voice={voice}
                 onVoice={setVoice}
+                scale={scale}
+                onScale={setScale}
                 metrics={audio.metrics}
                 analyser={audio.analyser}
                 playing={playing}
