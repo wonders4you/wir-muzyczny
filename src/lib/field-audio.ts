@@ -21,6 +21,38 @@ export type AudioSources = {
   particles: boolean;
 };
 
+export type VoiceKind = "pad" | "strings" | "organ" | "flute" | "bell" | "wind";
+export type VoiceId = "auto" | VoiceKind;
+
+export const VOICES: { id: VoiceId; name: string; blurb: string }[] = [
+  { id: "auto", name: "Z pola", blurb: "Barwa idzie za skrętem i dywergencją" },
+  { id: "pad", name: "Pad", blurb: "Miękkie sinusy" },
+  { id: "strings", name: "Smyczki", blurb: "Piła przez filtr" },
+  { id: "organ", name: "Organ", blurb: "Puste alikwoty" },
+  { id: "flute", name: "Flet", blurb: "Trójkąt, wysoki" },
+  { id: "bell", name: "Dzwon", blurb: "Niewspółmierne tony" },
+  { id: "wind", name: "Szum", blurb: "Pasmowy szum" },
+];
+
+export function isVoiceId(v: unknown): v is VoiceId {
+  return VOICES.some((item) => item.id === v);
+}
+
+export function voiceName(id: VoiceKind): string {
+  return VOICES.find((item) => item.id === id)?.name ?? "Pad";
+}
+
+export function resolveVoice(id: VoiceId, m: FieldMetrics): VoiceKind {
+  if (id !== "auto") return id;
+  if (m.mag < 0.12) return "pad";
+  if (m.curlAbs > 0.45 && m.curlAbs > m.divAbs * 1.15) return "pad";
+  if (m.div > 0.35) return "strings";
+  if (m.div < -0.35) return "organ";
+  if (m.curlAbs > 0.2 && m.divAbs > 0.18) return "flute";
+  if (m.divAbs < 0.12 && m.curlAbs < 0.12) return "wind";
+  return "pad";
+}
+
 export type SpeakerHz = {
   field: number | null;
   second: number | null;
@@ -160,6 +192,7 @@ class FieldSynth {
   private walkers: Walker[] = [];
   private built = false;
   private volume = 0.45;
+  private voice: VoiceKind = "pad";
 
   constructor() {
     this.ctx = new AudioContext();
@@ -273,6 +306,28 @@ class FieldSynth {
     this.built = true;
   }
 
+  private applyVoice(kind: VoiceKind) {
+    if (!this.built || this.voice === kind) return;
+    const wave: Record<VoiceKind, OscillatorType> = {
+      pad: "sine",
+      strings: "sawtooth",
+      organ: "square",
+      flute: "triangle",
+      bell: "sine",
+      wind: "sine",
+    };
+    const t = wave[kind];
+    this.drone.type = t;
+    this.drone2.type = kind === "flute" || kind === "bell" ? "sine" : t;
+    this.sub.type = kind === "bell" ? "triangle" : "sine";
+    this.probeOsc.type =
+      kind === "strings" || kind === "organ" ? "triangle" : t === "sawtooth" ? "triangle" : t;
+    const grainType: OscillatorType =
+      kind === "strings" ? "triangle" : kind === "organ" ? "square" : t;
+    for (const g of this.grains) g.osc.type = grainType;
+    this.voice = kind;
+  }
+
   async start() {
     this.build();
     if (this.ctx.state === "suspended") {
@@ -325,46 +380,61 @@ class FieldSynth {
     probe: AudioProbe | null;
     sources: AudioSources;
     metrics: FieldMetrics;
+    voice: VoiceId;
   }) {
     if (!this.built || this.ctx.state !== "running") return;
     const now = this.ctx.currentTime;
-    const { domain, dt, speed, playing, probe, sources, metrics, field, t } =
+    const { domain, dt, speed, playing, probe, sources, metrics, field, t, voice } =
       opts;
+    const kind = resolveVoice(voice, metrics);
+    this.applyVoice(kind);
     const live = playing ? 1 : 0.0008;
     const magN = clamp(metrics.mag / 3.2, 0, 1);
     const curlN = clamp(metrics.curlAbs / 2.4, 0, 1);
     const divN = clamp(metrics.div / 3, -1, 1);
-    const base = 78 + magN * 110;
-    const fifth = sources.field ? lerp(1.002, 1.5, clamp(divN, 0, 1)) : 1.01;
+    const bright = kind === "flute" ? 18 : kind === "bell" ? 28 : 0;
+    const base = 78 + magN * 110 + bright;
+    const ratio =
+      kind === "bell" ? 2.76 : kind === "organ" ? 2 : kind === "flute" ? 2 : lerp(1.002, 1.5, clamp(divN, 0, 1));
     const detune = clamp(metrics.curl * 2.2, -18, 18);
+    const loud =
+      kind === "strings" ? 0.42 : kind === "organ" ? 0.38 : kind === "wind" ? 0.55 : 1;
+    const q =
+      kind === "strings" ? 2.1 : kind === "bell" ? 7.5 : kind === "flute" ? 0.35 : kind === "organ" ? 0.45 : 0.7;
 
     this.drone.frequency.setTargetAtTime(base, now, 0.08);
-    this.drone2.frequency.setTargetAtTime(base * fifth + detune, now, 0.08);
+    this.drone2.frequency.setTargetAtTime(base * ratio + detune, now, 0.08);
     this.sub.frequency.setTargetAtTime(base * 0.5, now, 0.1);
     this.filter.frequency.setTargetAtTime(
-      420 + magN * 2200 - divN * 280,
+      (kind === "flute" ? 900 : 420) + magN * 2200 - divN * 280,
       now,
       0.1,
     );
+    this.filter.Q.setTargetAtTime(q, now, 0.12);
     this.lfo.frequency.setTargetAtTime(0.08 + curlN * 2.6, now, 0.12);
     const spin = curlN * 0.55 * (metrics.curl >= 0 ? 1 : -1);
     this.lfoGain.gain.setTargetAtTime(spin, now, 0.12);
     this.lfoGain2.gain.setTargetAtTime(-spin * 0.85, now, 0.12);
 
     const fieldAmp = sources.field && playing ? 1 : 0;
-    this.droneGain.gain.setTargetAtTime(0.11 * magN * fieldAmp * live, now, 0.08);
+    const droneMix = kind === "wind" ? 0.04 : 0.11;
+    const secondMix = kind === "wind" ? 0.02 : 0.07;
+    const subMix = kind === "wind" ? 0.03 : kind === "bell" ? 0.05 : 0.09;
+    this.droneGain.gain.setTargetAtTime(droneMix * magN * fieldAmp * live * loud, now, 0.08);
     this.drone2Gain.gain.setTargetAtTime(
-      0.07 * (0.25 + curlN) * fieldAmp * live,
+      secondMix * (0.25 + curlN) * fieldAmp * live * loud,
       now,
       0.08,
     );
-    this.subGain.gain.setTargetAtTime(0.09 * magN * fieldAmp * live, now, 0.1);
-    this.noiseFilter.frequency.setTargetAtTime(500 + magN * 1600, now, 0.1);
-    this.noiseGain.gain.setTargetAtTime(
-      0.018 * curlN * fieldAmp * live,
+    this.subGain.gain.setTargetAtTime(subMix * magN * fieldAmp * live * loud, now, 0.1);
+    this.noiseFilter.frequency.setTargetAtTime(
+      kind === "bell" ? 1800 + magN * 900 : 500 + magN * 1600,
       now,
       0.1,
     );
+    const noiseMix =
+      kind === "wind" ? 0.11 * (0.35 + magN) : kind === "bell" ? 0.022 * magN : 0.018 * curlN;
+    this.noiseGain.gain.setTargetAtTime(noiseMix * fieldAmp * live, now, 0.1);
 
     if (sources.probe && probe && probe.mag > 1e-6) {
       const pMag = clamp(probe.mag / 4, 0, 1);
@@ -431,6 +501,7 @@ type HookArgs = {
   probe: AudioProbe | null;
   volume: number;
   sources: AudioSources;
+  voice: VoiceId;
 };
 
 export function useFieldAudio({
@@ -441,10 +512,11 @@ export function useFieldAudio({
   probe,
   volume,
   sources,
+  voice,
 }: HookArgs) {
   const synthRef = useRef<FieldSynth | null>(null);
-  const propsRef = useRef({ field, domain, playing, speed, probe, volume, sources });
-  propsRef.current = { field, domain, playing, speed, probe, volume, sources };
+  const propsRef = useRef({ field, domain, playing, speed, probe, volume, sources, voice });
+  propsRef.current = { field, domain, playing, speed, probe, volume, sources, voice };
   const [listening, setListening] = useState(false);
   const [metrics, setMetrics] = useState<FieldMetrics | null>(null);
   const [hz, setHz] = useState<SpeakerHz | null>(null);
@@ -516,6 +588,7 @@ export function useFieldAudio({
         probe: p.probe,
         sources: p.sources,
         metrics: m,
+        voice: p.voice,
       });
       if (now - lastUi > 80) {
         lastUi = now;

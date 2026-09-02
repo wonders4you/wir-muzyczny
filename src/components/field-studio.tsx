@@ -25,7 +25,7 @@ import {
   type CompiledField,
 } from "@/lib/field-math";
 import { DEFAULT_PRESET, FEATURED_PRESETS, PRESETS } from "@/lib/presets";
-import { useFieldAudio, speakerParts, type AudioSources, type SpeakerHz } from "@/lib/field-audio";
+import { useFieldAudio, speakerParts, type AudioSources, type SpeakerHz, isVoiceId, type VoiceId } from "@/lib/field-audio";
 import {
   mapTilt,
   specFor,
@@ -61,6 +61,7 @@ type Saved = {
   listenField: boolean;
   listenProbe: boolean;
   listenParticles: boolean;
+  voice: VoiceId;
   recentIds: string[];
   pitchTarget: TiltTarget;
   rollTarget: TiltTarget;
@@ -140,6 +141,7 @@ export function FieldStudio() {
     probe: true,
     particles: true,
   });
+  const [voice, setVoice] = useState<VoiceId>("auto");
   const [probe, setProbe] = useState<ProbeReadout | null>(null);
   const [resetToken, setResetToken] = useState(0);
   const [hydrated, setHydrated] = useState(false);
@@ -195,6 +197,7 @@ export function FieldStudio() {
             ? saved.listenParticles
             : prev.particles,
       }));
+      if (isVoiceId(saved.voice)) setVoice(saved.voice);
       if (Array.isArray(saved.recentIds)) {
         const valid = saved.recentIds.filter(
           (id): id is string =>
@@ -233,6 +236,7 @@ export function FieldStudio() {
       listenField: sources.field,
       listenProbe: sources.probe,
       listenParticles: sources.particles,
+      voice,
       recentIds,
       pitchTarget,
       rollTarget,
@@ -258,6 +262,7 @@ export function FieldStudio() {
     panel,
     volume,
     sources,
+    voice,
     recentIds,
     pitchTarget,
     rollTarget,
@@ -278,6 +283,7 @@ export function FieldStudio() {
     probe,
     volume,
     sources,
+    voice,
   });
 
   const tilt = useDeviceTilt(tiltOn);
@@ -569,6 +575,8 @@ export function FieldStudio() {
                 onVolume={setVolume}
                 sources={sources}
                 onSources={setSources}
+                voice={voice}
+                onVoice={setVoice}
                 metrics={audio.metrics}
                 analyser={audio.analyser}
                 playing={playing}

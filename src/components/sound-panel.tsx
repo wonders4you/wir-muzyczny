@@ -7,9 +7,13 @@ import { Slider } from "@/components/ui/slider";
 import {
   describeTimbre,
   formatHz,
+  resolveVoice,
+  voiceName,
+  VOICES,
   type AudioSources,
   type FieldMetrics,
   type SpeakerHz,
+  type VoiceId,
 } from "@/lib/field-audio";
 import { formatPlain } from "@/lib/field-math";
 import { cn } from "@/lib/utils";
@@ -22,6 +26,8 @@ type Props = {
   onVolume: (value: number) => void;
   sources: AudioSources;
   onSources: (next: AudioSources) => void;
+  voice: VoiceId;
+  onVoice: (next: VoiceId) => void;
   metrics: FieldMetrics | null;
   analyser: AnalyserNode | null;
   playing: boolean;
@@ -37,6 +43,8 @@ export function SoundPanel({
   onVolume,
   sources,
   onSources,
+  voice,
+  onVoice,
   metrics,
   analyser,
   playing,
@@ -53,7 +61,7 @@ export function SoundPanel({
         </h2>
         <p className="mt-1 text-xs text-muted-foreground">
           Fala z pola {presetName.toLowerCase()} — skręt kręci stereo, |F| ustala
-          ton, dywergencja jasność.
+          ton, dywergencja jasność. Barwa to kształt fali, nie równanie.
         </p>
       </div>
 
@@ -115,8 +123,38 @@ export function SoundPanel({
       <Separator />
 
       <div className="space-y-3">
+        <div className="flex items-baseline justify-between gap-3">
+          <p className="text-xs font-medium tracking-wide text-muted-foreground">
+            Barwa
+          </p>
+          {metrics ? (
+            <p className="font-mono text-xs tabular-nums text-foreground">
+              {voice === "auto" ? `auto · ${voiceName(resolveVoice("auto", metrics))}` : voiceName(resolveVoice(voice, metrics))}
+            </p>
+          ) : null}
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          {VOICES.map((item) => (
+            <VoiceToggle
+              key={item.id}
+              pressed={voice === item.id}
+              label={item.name}
+              onPressedChange={(on) => {
+                if (on) onVoice(item.id);
+              }}
+            />
+          ))}
+        </div>
+        <p className="text-xs text-muted-foreground">
+          {VOICES.find((item) => item.id === voice)?.blurb}
+        </p>
+      </div>
+
+      <Separator />
+
+      <div className="space-y-3">
         <p className="text-xs font-medium tracking-wide text-muted-foreground">
-          Głosy
+          Źródła
         </p>
         <div className="flex flex-wrap gap-1.5">
           <VoiceToggle
