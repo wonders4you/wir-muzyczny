@@ -17,3 +17,13 @@ AGENTS.md
 !.env.example
 .grok/*
 !.grok/app-env.json
+public/__grok/
+scripts/grok-pwa-plugin.mjs
+scripts/grok-pwa-plugin.test.mjs
+scripts/grok-pwa-shared.mjs
+scripts/grok-pwa-shared.d.mts
+scripts/install-page.html
+scripts/brand-check.mjs
+scripts/brand-check.test.mjs
+server/middleware/grok-pwa.ts
+server/virtual-grok-og-identity.d.ts

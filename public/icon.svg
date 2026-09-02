@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Wir Muzyczny">
+  <rect width="512" height="512" rx="112" fill="#0c0d10"/>
+  <rect x="28" y="28" width="456" height="456" rx="92" fill="#15171c"/>
+  <circle cx="256" cy="256" r="168" fill="none" stroke="#6d7370" stroke-width="6"/>
+  <circle
+    cx="256"
+    cy="256"
+    r="168"
+    fill="none"
+    stroke="#b7d0c8"
+    stroke-width="14"
+    stroke-linecap="round"
+    stroke-dasharray="36 28"
+    transform="rotate(-18 256 256)"
+  />
+  <path
+    d="M256 88 A168 168 0 0 1 424 256"
+    fill="none"
+    stroke="#ecece6"
+    stroke-width="18"
+    stroke-linecap="round"
+  />
+  <path
+    d="M398 214 L424 256 L372 262"
+    fill="none"
+    stroke="#ecece6"
+    stroke-width="18"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+  <circle cx="256" cy="256" r="28" fill="#c5c9c2"/>
+  <circle cx="256" cy="256" r="10" fill="#0c0d10"/>
+  <circle cx="374" cy="148" r="8" fill="#e4efe9"/>
+  <circle cx="148" cy="348" r="6" fill="#b7d0c8"/>
+  <circle cx="132" cy="196" r="5" fill="#8b8d88"/>
+</svg>

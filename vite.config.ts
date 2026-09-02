@@ -1,13 +1,12 @@
-import { readdirSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, readdirSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import type { Plugin } from "vite";
 import { defineConfig } from "vite";
 import { tanstackStart } from "@tanstack/react-start/plugin/vite";
 import viteReact from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import { nitro } from "nitro/vite";
-// @ts-expect-error JS plugin alongside the TS vite config
-import { grokPwaPlugin } from "./scripts/grok-pwa-plugin.mjs";
 // @ts-expect-error JS plugin alongside the TS vite config
 import { appEnvPlugin } from "./scripts/app-env-plugin.mjs";
 import { isMigrationFile } from "./scripts/migration-plan.mjs";
@@ -145,7 +144,20 @@ function authPopupPlugin(): Plugin {
 // `0.0.0.0:8080` is the live-preview contract — don't change host/port.
 // The dev server starts once `src/router.tsx` and `src/routes/` exist — see
 // AGENTS.md § "First scaffold".
-export default defineConfig(({ command, isPreview }) => ({
+const grokPwaPluginPath = join(
+  dirname(fileURLToPath(import.meta.url)),
+  "scripts/grok-pwa-plugin.mjs",
+);
+
+export default defineConfig(async ({ command, isPreview }) => {
+  const grokPlugins: Plugin[] = [];
+  if (existsSync(grokPwaPluginPath)) {
+    const mod = (await import("./scripts/grok-pwa-plugin.mjs")) as {
+      grokPwaPlugin: () => Plugin;
+    };
+    grokPlugins.push(mod.grokPwaPlugin());
+  }
+  return {
   server: {
     host: "0.0.0.0",
     port: 8080,
@@ -163,8 +175,7 @@ export default defineConfig(({ command, isPreview }) => ({
     authPopupPlugin(),
     // Dev-only /__app-env, read by scripts/check-auth-invariant.mjs.
     appEnvPlugin(),
-    // PWA head + ?install=1 tutorial page; runs before Start/Nitro.
-    grokPwaPlugin(),
+    ...grokPlugins,
     tailwindcss(),
     tanstackStart(),
     ...(command === "build" || isPreview
@@ -180,4 +191,5 @@ export default defineConfig(({ command, isPreview }) => ({
       : []),
     viteReact(),
   ],
-}));
+};
+});
